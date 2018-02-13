@@ -76,13 +76,13 @@ class ClientManager:
 
         def change_area(self, area):
             if self.area == area:
-                raise ClientError('You are already in this area.')
+                raise ClientError('Welcome Back, Comrade!')
             old_area = self.area
             if not area.is_char_available(self.char_id):
                 try:
                     new_char_id = area.get_rand_avail_char_id()
                 except AreaError:
-                    raise ClientError('No available characters in that area.')
+                    raise ClientError('The War Zone is too hot, RETREAT!')
                 self.area.remove_client(self)
                 self.area = area
                 area.new_client(self)
