@@ -282,8 +282,6 @@ def ooc_cmd_pos(client, arg):
 def ooc_cmd_bg(client, arg):
     if len(arg) == 0:
         raise ArgumentError('You must specify a name. Use /bg <background>.')
-    if not client.is_mod and client.area.bg_lock == "true":
-        raise AreaError("This area's background is locked")
     try:
         client.area.change_background(arg)
     except AreaError:
@@ -403,8 +401,6 @@ def ooc_cmd_unban(client, arg):
     logger.log_server('Unbanned {}.'.format(ip), client)
 
 def ooc_cmd_play(client, arg):
-    if not client.is_mod:
-        raise ClientError('You must be authorized to do that.')
     if len(arg) == 0:
         raise ArgumentError('You must specify a song.')
     client.area.play_music(arg, client.char_id, -1)
