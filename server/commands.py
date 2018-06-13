@@ -931,3 +931,7 @@ def ooc_cmd_unfollow(client, arg):
 def ooc_cmd_time(client, arg):
     client.send_host_message(time.asctime(time.localtime(time.time())))
 
+
+def ooc_cmd_followedby(client, arg):
+    for i in client.followedby:
+        print(i)

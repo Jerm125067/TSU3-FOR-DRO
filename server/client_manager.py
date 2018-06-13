@@ -57,7 +57,7 @@ class ClientManager:
             self.ipid = ipid
 
             self.following = ''
-            self.followedby = ''
+            self.followedby = []
             
             #music flood-guard stuff
             self.mus_counter = 0
@@ -174,20 +174,22 @@ class ClientManager:
             self.send_command('BN', self.area.background)
             self.send_command('LE', *self.area.get_evidence_list(self))
 
-            if self.followedby != "":
-                self.followedby.follow_area(area)
+            if self.followedby != []:
+                for i in self.followedby:
+                    num = self.followedby.index(i)
+                    self.followedby[num].follow_area(area)
 
         def follow_user(self, arg):
             self.following = arg
-            arg.followedby = self
+            arg.followedby.append(self)
             self.send_host_message('Began following at {}'.format(time.asctime(time.localtime(time.time()))))
             if self.area != arg.area:
                 self.follow_area(arg.area)
 
         def unfollow_user(self):
-            self.following.followedby = ""
-            self.following = ""
             self.send_host_message("Stopped following at {}.".format(time.asctime(time.localtime(time.time()))))
+            self.following.followedby.remove(self)
+            self.following = ""
 
         def follow_area(self, area):
             self.send_host_message('Followed user moved area at {}'.format(time.asctime(time.localtime(time.time()))))
@@ -503,7 +505,9 @@ class ClientManager:
 
     def remove_client(self, client):
         try:
-            client.followedby.unfollow_user()
+            temp = client.followedby.copy()
+            for i in temp:
+                i.unfollow_user()
         except AttributeError:
             pass
         self.cur_id[client.id] = False
