@@ -935,3 +935,8 @@ def ooc_cmd_time(client, arg):
 def ooc_cmd_followedby(client, arg):
     for i in client.followedby:
         print(i)
+        
+def ooc_cmd_commands(client, arg):
+    if len(arg) != 0:
+        raise ArgumentError('This command has no arguments.')
+    client.send_host_message('commands: \r\n /bg \r\n /getarea(s) \r\n /time \r\n /roll (max) \r\n /rollp (max) \r\n /g \r\n /lock \r\n /kickself \r\n /coinflip \r\n /pm (ID)')        
