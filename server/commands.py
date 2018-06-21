@@ -963,7 +963,11 @@ def ooc_cmd_8ball(client, arg):
     logger.log_server(
         'The magic 8 ball said {}.'.format(flip))
 		
-
+def ooc_cmd_commands(client, arg):
+    if len(arg) != 0:
+        raise ArgumentError('This command has no arguments.')
+    client.send_host_message('commands: \r\n /bg \r\n /getarea(s) \r\n /discord \r\n /time \r\n /roll (max) \r\n /rollp (max) \r\n /g \r\n /ToD \r\n /8ball \r\n /lock \r\n /kickself \r\n /coinflip \r\n /pm (ID)')
+		
 def ooc_cmd_discord(client, arg):
     if len(arg) != 0:
         raise ArgumentError('This command has no arguments.')
