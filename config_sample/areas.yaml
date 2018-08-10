@@ -1,9 +1,24 @@
-- area: Basement
-  background: gs4
+- area: 0-Lobby
+  background: Class Trial Debate Room DR1-3_HD
   bglock: true
-- area: Courtroom 1
-  background: gs5
+  evidence_mod: FFA
+  locking_allowed: false
+  iniswap_allowed: true
+  rp_getareas_allowed: true
+  rp_getarea_allowed: true
+- area: 1-Testing Labs
+  background: Bio Lab_HD
   bglock: false
-- area: Courtroom 2
-  background: gs4
+  evidence_mod: CM
+  locking_allowed: true
+  iniswap_allowed: true
+  rp_getareas_allowed: false
+  rp_getarea_allowed: false
+- area: 2-Class Trial Room
+  background: Class Trial Debate Room DR2-1_HD
   bglock: false
+  evidence_mod: CM
+  locking_allowed: true
+  iniswap_allowed: true
+  
+  
