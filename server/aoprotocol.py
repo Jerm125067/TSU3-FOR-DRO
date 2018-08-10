@@ -17,12 +17,14 @@
 
 import asyncio
 import re
+from time import localtime, strftime
 from enum import Enum
 
 from server import commands
 from server import logger
 from server.exceptions import ClientError, AreaError, ArgumentError, ServerError
 from server.fantacrypt import fanta_decrypt
+from server.evidence import EvidenceList
 
 
 class AOProtocol(asyncio.Protocol):
@@ -135,10 +137,16 @@ class AOProtocol(asyncio.Protocol):
         if not self.validate_net_cmd(args, self.ArgType.STR, needs_auth=False):
             return
         self.client.hdid = args[0]
-        if self.server.ban_manager.is_banned(self.client.get_ip()):
-            self.client.disconnect()
-            return
-
+        if self.client.hdid not in self.client.server.hdid_list:
+            self.client.server.hdid_list[self.client.hdid] = []
+        if self.client.ipid not in self.client.server.hdid_list[self.client.hdid]:
+            self.client.server.hdid_list[self.client.hdid].append(self.client.ipid)
+            self.client.server.dump_hdids()
+        for ipid in self.client.server.hdid_list[self.client.hdid]:
+            if self.server.ban_manager.is_banned(ipid):
+                self.client.disconnect()
+                return
+        logger.log_server('Connected. HDID: {}.'.format(self.client.hdid), self.client)
         self.client.send_command('ID', self.client.id, self.server.software, self.server.get_version_string())
         self.client.send_command('PN', self.server.get_player_count() - 1, self.server.config['playerlimit'])
 
@@ -176,7 +184,7 @@ class AOProtocol(asyncio.Protocol):
 
         self.client.is_ao2 = True
 
-        self.client.send_command('FL', 'yellowtext', 'customobjections', 'flipping', 'fastloading', 'noencryption', 'deskmod')
+        self.client.send_command('FL', 'yellowtext', 'customobjections', 'flipping', 'fastloading', 'noencryption', 'deskmod', 'evidence')
 
     def net_cmd_ch(self, _):
         """ Periodically checks the connection.
@@ -270,7 +278,11 @@ class AOProtocol(asyncio.Protocol):
         """
 
         self.client.send_done()
-        self.client.send_area_list()
+        if self.server.config['announce_areas']:
+            if self.server.config['rp_mode_enabled']:
+                self.client.send_limited_area_list()
+            else:
+                self.client.send_area_list()
         self.client.send_motd()
 
     def net_cmd_cc(self, args):
@@ -304,25 +316,30 @@ class AOProtocol(asyncio.Protocol):
                                      self.ArgType.INT, self.ArgType.INT, self.ArgType.INT, self.ArgType.INT,
                                      self.ArgType.INT, self.ArgType.INT, self.ArgType.INT):
             return
-        msg_type, pre, folder, anim, text, pos, sfx, anim_type, cid, sfx_delay, button, unk, flip, ding, color = args
+        msg_type, pre, folder, anim, text, pos, sfx, anim_type, cid, sfx_delay, button, evidence, flip, ding, color = args
+        if self.client.area.is_iniswap(self.client, pre, anim, folder) and folder != self.client.get_char_name():
+            self.client.send_host_message("Iniswap is blocked in this area")
+            return
         if msg_type not in ('chat', '0', '1'):
             return
-        if anim_type not in (0, 1, 2, 5, 6):
+        if anim_type not in (0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10):
             return
         if cid != self.client.char_id:
             return
         if sfx_delay < 0:
             return
-        if button not in (0, 1, 2, 3, 4):
+        if button not in (0, 1, 2, 3, 4, 5, 6, 7):
             return
-        if ding not in (0, 1):
+        if evidence < 0:
+            return
+        if ding not in (0, 1, 2):
             return
         if color not in (0, 1, 2, 3, 4, 5, 6):
             return
-        if color == 2 and not self.client.is_mod:
+        if color == 5 and not self.client.is_mod and not self.client.is_cm:
             color = 0
         if color == 6:
-            text = re.sub(r'[^\x00-\x7F]+',' ', text) #remove all unicode to prevent redtext abuse
+            text = re.sub(r'[^\x00-\x7F]+',' ', text) #remove all unicode to prevent now yellow text abuse
             if len(text.strip( ' ' )) == 1:
                 color = 0
             else:
@@ -334,10 +351,24 @@ class AOProtocol(asyncio.Protocol):
             if pos not in ('def', 'pro', 'hld', 'hlp', 'jud', 'wit'):
                 return
         msg = text[:256]
+        if self.client.gimp: #If you're gimped, gimp message.
+            msg = self.client.gimp_message(msg)
+        if self.client.disemvowel: #If you're disemvoweled, replace string.
+            msg = self.client.disemvowel_message(msg)
+        if self.client.remove_h: #If h is removed, replace string.
+            msg = self.client.remove_h_message(msg)
+        self.client.pos = pos
+        if evidence:
+            if self.client.area.evi_list.evidences[self.client.evi_list[evidence] - 1].pos != 'all':
+                self.client.area.evi_list.evidences[self.client.evi_list[evidence] - 1].pos = 'all'
+                self.client.area.broadcast_evidence_list()
         self.client.area.send_command('MS', msg_type, pre, folder, anim, msg, pos, sfx, anim_type, cid,
-                                      sfx_delay, button, unk, flip, ding, color)
+                                      sfx_delay, button, self.client.evi_list[evidence], flip, ding, color)
         self.client.area.set_next_msg_delay(len(msg))
         logger.log_server('[IC][{}][{}]{}'.format(self.client.area.id, self.client.get_char_name(), msg), self.client)
+
+        if self.client.area.is_recording:
+            self.client.area.recorded_messages.append(args)
 
     def net_cmd_ct(self, args):
         """ OOC Message
@@ -345,10 +376,21 @@ class AOProtocol(asyncio.Protocol):
         CT#<name:string>#<message:string>#%
 
         """
+        if self.client.is_ooc_muted:  # Checks to see if the client has been muted by a mod
+            self.client.send_host_message("You have been muted by a moderator")
+            return
         if not self.validate_net_cmd(args, self.ArgType.STR, self.ArgType.STR):
             return
+        if self.client.name != args[0] and self.client.fake_name != args[0]:
+            if self.client.is_valid_name(args[0]):
+                self.client.name = args[0]
+                self.client.fake_name = args[0]
+            else:
+                self.client.fake_name = args[0]
+                self.client.name = ''
         if self.client.name == '':
-            self.client.name = args[0]
+            self.client.send_host_message('You must insert a name with at least one letter')
+            return
         if self.client.name.startswith(self.server.config['hostname']) or self.client.name.startswith('<dollar>G'):
             self.client.send_host_message('That name is reserved!')
             return
@@ -359,12 +401,16 @@ class AOProtocol(asyncio.Protocol):
             if len(spl) == 2:
                 arg = spl[1][:256]
             try:
-                getattr(commands, 'ooc_cmd_{}'.format(cmd))(self.client, arg)
+                called_function = 'ooc_cmd_{}'.format(cmd)
+                getattr(commands, called_function)(self.client, arg)
             except AttributeError:
+                print('Attribute error with ' + called_function)
                 self.client.send_host_message('Invalid command.')
             except (ClientError, AreaError, ArgumentError, ServerError) as ex:
                 self.client.send_host_message(ex)
         else:
+            if self.client.disemvowel:
+                args[1] = self.client.disemvowel_message(args[1])
             self.client.area.send_command('CT', self.client.name, args[1])
             logger.log_server(
                 '[OOC][{}][{}][{}]{}'.format(self.client.area.id, self.client.get_char_name(), self.client.name,
@@ -376,17 +422,23 @@ class AOProtocol(asyncio.Protocol):
         MC#<song_name:int>#<???:int>#%
 
         """
-        if self.client.is_muted:  # Checks to see if the client has been muted by a mod
-            self.client.send_host_message("You have been muted by a moderator")
-            return
-        if not self.validate_net_cmd(args, self.ArgType.STR, self.ArgType.INT):
-            return
-        if args[1] != self.client.char_id:
-            return
         try:
             area = self.server.area_manager.get_area_by_name(args[0])
             self.client.change_area(area)
         except AreaError:
+            if self.client.is_muted:  # Checks to see if the client has been muted by a mod
+                self.client.send_host_message("You have been muted by a moderator")
+                return
+            if not self.client.is_dj:
+                self.client.send_host_message('You were blockdj\'d by a moderator.')
+                return
+            if not self.validate_net_cmd(args, self.ArgType.STR, self.ArgType.INT):
+                return
+            if args[1] != self.client.char_id:
+                return
+            if self.client.change_music_cd():
+                self.client.send_host_message('You changed song too much times. Please try again after {} seconds.'.format(int(self.client.change_music_cd())))
+                return
             try:
                 name, length = self.server.get_song_data(args[0])
                 self.client.area.play_music(name, self.client.char_id, length)
@@ -434,6 +486,43 @@ class AOProtocol(asyncio.Protocol):
         except AreaError:
             return
 
+    def net_cmd_pe(self, args):
+        """ Adds a piece of evidence.
+
+        PE#<name: string>#<description: string>#<image: string>#%
+
+        """
+        if len(args) < 3:
+            return
+#        evi = Evidence(args[0], args[1], args[2], self.client.pos)
+        self.client.area.evi_list.add_evidence(self.client, args[0], args[1], args[2], 'all')
+        self.client.area.broadcast_evidence_list()
+    
+    def net_cmd_de(self, args):
+        """ Deletes a piece of evidence.
+
+        DE#<id: int>#%
+
+        """
+
+        self.client.area.evi_list.del_evidence(self.client, self.client.evi_list[int(args[0])])
+        self.client.area.broadcast_evidence_list()
+
+    def net_cmd_ee(self, args):
+        """ Edits a piece of evidence.
+
+        EE#<id: int>#<name: string>#<description: string>#<image: string>#%
+
+        """
+
+        if len(args) < 4:
+            return
+
+        evi = (args[1], args[2], args[3], 'all')
+
+        self.client.area.evi_list.edit_evidence(self.client, self.client.evi_list[int(args[0])], evi)
+        self.client.area.broadcast_evidence_list()
+
     def net_cmd_zz(self, _):
         """ Sent on mod call.
 
@@ -446,11 +535,13 @@ class AOProtocol(asyncio.Protocol):
             self.client.send_host_message("You must wait 30 seconds between mod calls.")
             return
 
-        self.server.send_all_cmd_pred('ZZ', '{} ({}) in {} ({})'
-                                      .format(self.client.get_char_name(), self.client.get_ip(), self.client.area.name,
+        current_time = strftime("%H:%M", localtime())
+
+        self.server.send_all_cmd_pred('ZZ', '[{}] {} ({}) in {} ({})'
+                                      .format(current_time, self.client.get_char_name(), self.client.get_ip(), self.client.area.name,
                                               self.client.area.id), pred=lambda c: c.is_mod)
         self.client.set_mod_call_delay()
-        logger.log_server('[{}]{} called a moderator.'.format(self.client.area.id, self.client.get_char_name()))
+        logger.log_server('[{}][{}]{} called a moderator.'.format(self.client.get_ip(), self.client.area.id, self.client.get_char_name()))
 
     def net_cmd_opKICK(self, args):
         self.net_cmd_ct(['opkick', '/kick {}'.format(args[0])])
@@ -476,6 +567,9 @@ class AOProtocol(asyncio.Protocol):
         'MC': net_cmd_mc,  # play song
         'RT': net_cmd_rt,  # WT/CE buttons
         'HP': net_cmd_hp,  # penalties
+        'PE': net_cmd_pe,  # add evidence
+        'DE': net_cmd_de,  # delete evidence
+        'EE': net_cmd_ee,  # edit evidence
         'ZZ': net_cmd_zz,  # call mod button
         'opKICK': net_cmd_opKICK,  # /kick with guard on
         'opBAN': net_cmd_opBAN,  # /ban with guard on

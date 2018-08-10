@@ -18,7 +18,8 @@
 import asyncio
 
 import yaml
-
+import json
+import random
 from server import logger
 from server.aoprotocol import AOProtocol
 from server.area_manager import AreaManager
@@ -28,30 +29,35 @@ from server.districtclient import DistrictClient
 from server.exceptions import ServerError
 from server.masterserverclient import MasterServerClient
 
-
 class TsuServer3:
     def __init__(self):
+        self.config = None
+        self.allowed_iniswaps = None
+        self.load_config()
+        self.load_iniswaps()
         self.client_manager = ClientManager(self)
         self.area_manager = AreaManager(self)
-        self.ban_manager = BanManager()
-        self.version = 'tsuserver3dev'
+        self.ban_manager = BanManager(self)
         self.software = 'tsuserver3'
+        self.version = 'tsuserver3dev'
         self.release = 3
-        self.major_version = 0
+        self.major_version = 1
         self.minor_version = 1
+        self.ipid_list = {}
+        self.hdid_list = {}
         self.char_list = None
         self.char_pages_ao1 = None
         self.music_list = None
         self.music_list_ao2 = None
         self.music_pages_ao1 = None
         self.backgrounds = None
-        self.config = None
-        self.load_config()
         self.load_characters()
         self.load_music()
         self.load_backgrounds()
+        self.load_ids()
         self.district_client = None
         self.ms_client = None
+        self.rp_mode = False
         logger.setup_logger(debug=self.config['debug'])
 
     def start(self):
@@ -88,8 +94,20 @@ class TsuServer3:
     def get_version_string(self):
         return str(self.release) + '.' + str(self.major_version) + '.' + str(self.minor_version)
 
+    def reload(self):
+        with open('config/characters.yaml', 'r') as chars:
+            self.char_list = yaml.load(chars)
+        with open('config/music.yaml', 'r') as music:
+            self.music_list = yaml.load(music)
+        self.build_music_pages_ao1()
+        self.build_music_list_ao2()
+        with open('config/backgrounds.yaml', 'r') as bgs:
+            self.backgrounds = yaml.load(bgs)
+
     def new_client(self, transport):
         c = self.client_manager.new_client(transport)
+        if self.rp_mode:
+            c.in_rp = True
         c.server = self
         c.area = self.area_manager.default_area()
         c.area.new_client(c)
@@ -103,24 +121,67 @@ class TsuServer3:
         return len(self.client_manager.clients)
 
     def load_config(self):
-        with open('config/config.yaml', 'r') as cfg:
+        with open('config/config.yaml', 'r', encoding = 'utf-8') as cfg:
             self.config = yaml.load(cfg)
+            self.config['motd'] = self.config['motd'].replace('\\n', ' \n') 
+        if 'music_change_floodguard' not in self.config:
+            self.config['music_change_floodguard'] = {'times_per_interval': 1,  'interval_length': 0, 'mute_length': 0}
 
     def load_characters(self):
-        with open('config/characters.yaml', 'r') as chars:
+        with open('config/characters.yaml', 'r', encoding = 'utf-8') as chars:
             self.char_list = yaml.load(chars)
         self.build_char_pages_ao1()
 
     def load_music(self):
-        with open('config/music.yaml', 'r') as music:
+        with open('config/music.yaml', 'r', encoding = 'utf-8') as music:
             self.music_list = yaml.load(music)
         self.build_music_pages_ao1()
         self.build_music_list_ao2()
         
+    def load_ids(self):
+        self.ipid_list = {}
+        self.hdid_list = {}
+        #load ipids
+        try:
+            with open('storage/ip_ids.json', 'r', encoding = 'utf-8') as whole_list:
+                self.ipid_list = json.loads(whole_list.read())
+        except:
+            logger.log_debug('Failed to load ip_ids.json from ./storage. If ip_ids.json is exist then remove it.')
+        #load hdids
+        try:
+            with open('storage/hd_ids.json', 'r', encoding = 'utf-8') as whole_list:
+                self.hdid_list = json.loads(whole_list.read())
+        except:
+            logger.log_debug('Failed to load hd_ids.json from ./storage. If hd_ids.json is exist then remove it.')
+           
+    def dump_ipids(self):
+        with open('storage/ip_ids.json', 'w') as whole_list:
+            json.dump(self.ipid_list, whole_list)
+            
+    def dump_hdids(self):
+        with open('storage/hd_ids.json', 'w') as whole_list:
+            json.dump(self.hdid_list, whole_list)
+         
+    def get_ipid(self, ip):
+        if not (ip in self.ipid_list):
+            while True:
+                ipid = random.randint(0,10**10-1)
+                if ipid not in self.ipid_list:
+                    break
+            self.ipid_list[ip] = ipid
+            self.dump_ipids()
+        return self.ipid_list[ip]
 
     def load_backgrounds(self):
-        with open('config/backgrounds.yaml', 'r') as bgs:
+        with open('config/backgrounds.yaml', 'r', encoding = 'utf-8') as bgs:
             self.backgrounds = yaml.load(bgs)
+            
+    def load_iniswaps(self):
+        try:
+            with open('config/iniswaps.yaml', 'r', encoding = 'utf-8') as iniswaps:
+                self.allowed_iniswaps = yaml.load(iniswaps)
+        except:
+            logger.log_debug('cannot find iniswaps.yaml')
 
     def build_char_pages_ao1(self):
         self.char_pages_ao1 = [self.char_list[x:x + 10] for x in range(0, len(self.char_list), 10)]
@@ -182,13 +243,35 @@ class TsuServer3:
 
     def broadcast_global(self, client, msg, as_mod=False):
         char_name = client.get_char_name()
-        ooc_name = '{}[{}][{}]'.format('<dollar>G', client.area.id, char_name)
+        ooc_name = '{}[{}][{}]'.format('G', client.area.id, char_name)
         if as_mod:
             ooc_name += '[M]'
         self.send_all_cmd_pred('CT', ooc_name, msg, pred=lambda x: not x.muted_global)
         if self.config['use_district']:
             self.district_client.send_raw_message(
                 'GLOBAL#{}#{}#{}#{}'.format(int(as_mod), client.area.id, char_name, msg))
+
+    def broadcast_globalooc(self, client, msg, as_mod=False):
+        username = client.name
+        ooc_name = '{}[{}][{}]'.format('Global', client.area.id, username)
+        if as_mod:
+            ooc_name += '[MOD]'
+        self.send_all_cmd_pred('CT', ooc_name, msg, pred=lambda x: not x.muted_global)
+        if self.config['use_district']:
+            self.district_client.send_raw_message(
+                'GLOBAL#{}#{}#{}#{}'.format(int(as_mod), client.area.id, username, msg))
+
+    def broadcast_globalmod(self, client, msg, as_mod=False):
+        username = client.name
+        ooc_name = '{}[{}]'.format('Global', username)
+        if as_mod:
+            ooc_name += '[MOD]'
+        self.send_all_cmd_pred('CT', ooc_name, msg, pred=lambda x: not x.muted_global)
+        if self.config['use_district']:
+            self.district_client.send_raw_message(
+                'GLOBAL#{}#{}#{}#{}'.format(int(as_mod), client.area.id, username, msg))
+            
+            
 
     def broadcast_need(self, client, msg):
         char_name = client.get_char_name()

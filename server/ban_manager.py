@@ -16,14 +16,16 @@
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 import json
+import ipaddress
 
 from server.exceptions import ServerError
 
 
 class BanManager:
-    def __init__(self):
+    def __init__(self, server):
         self.bans = []
         self.load_banlist()
+        self.server = server
 
     def load_banlist(self):
         try:
@@ -37,18 +39,34 @@ class BanManager:
             json.dump(self.bans, banlist_file)
 
     def add_ban(self, ip):
+        try:
+            try:
+                int(ip)
+            except ValueError:
+                ipaddress.ip_address(ip)
+                ip = self.server.get_ipid(ip)
+        except ValueError:
+            raise ServerError('Argument must be an IP address or 10-digit number.')
         if ip not in self.bans:
             self.bans.append(ip)
         else:
-            raise ServerError('This IP is already banned.')
+            raise ServerError('User is already banned.')
         self.write_banlist()
 
     def remove_ban(self, ip):
+        try:
+            try:
+                int(ip)
+            except ValueError:
+                ipaddress.ip_address(ip)
+                ip = self.server.get_ipid(ip)
+        except ValueError:
+            raise ServerError('Argument must be an IP address or 10-digit number.')
         if ip in self.bans:
             self.bans.remove(ip)
         else:
-            raise ServerError('This IP is not banned.')
+            raise ServerError('This IPID is not banned.')
         self.write_banlist()
 
-    def is_banned(self, ip):
-        return ip in self.bans
+    def is_banned(self, ipid):
+        return ipid in self.bans

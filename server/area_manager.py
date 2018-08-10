@@ -21,12 +21,15 @@ import time
 import yaml
 
 from server.exceptions import AreaError
+from server.evidence import EvidenceList
 
 
 class AreaManager:
     class Area:
-        def __init__(self, area_id, server, name, background, bg_lock):
+        def __init__(self, area_id, server, name, background, bg_lock, evidence_mod = 'FFA', locking_allowed = False, iniswap_allowed = True, rp_getarea_allowed = True, rp_getareas_allowed = True):
+            self.iniswap_allowed = iniswap_allowed
             self.clients = set()
+            self.invite_list = {}
             self.id = area_id
             self.name = name
             self.background = background
@@ -41,13 +44,56 @@ class AreaManager:
             self.judgelog = []
             self.current_music = ''
             self.current_music_player = ''
+            self.evi_list = EvidenceList()
+            self.is_recording = False
+            self.recorded_messages = []
+            self.evidence_mod = evidence_mod
+            self.locking_allowed = locking_allowed
+            self.owned = False
+            self.rp_getarea_allowed = rp_getarea_allowed
+            self.rp_getareas_allowed = rp_getareas_allowed
+
+            """
+            #debug
+            self.evidence_list.append(Evidence("WOW", "desc", "1.png"))
+            self.evidence_list.append(Evidence("wewz", "desc2", "2.png"))
+            self.evidence_list.append(Evidence("weeeeeew", "desc3", "3.png"))
+            """
+            
+            self.is_locked = False
+            self.is_gmlocked = False
+            self.is_modlocked = False
 
         def new_client(self, client):
             self.clients.add(client)
 
         def remove_client(self, client):
             self.clients.remove(client)
+            if len(self.clients) == 0:
+                self.unlock()
+            if client.is_cm:
+                client.is_cm = False
+                self.owned = False
+                if self.is_locked:
+                    self.unlock()
+        
+        def unlock(self):
+            self.is_locked = False
+            if not self.is_gmlocked and not self.is_modlocked:
+                self.invite_list = {}
 
+        def gmunlock(self):
+            self.is_gmlocked = False
+            self.is_locked = False
+            if not self.is_modlocked:
+                self.invite_list = {}
+
+        def modunlock(self):
+            self.is_modlocked = False
+            self.is_gmlocked = False
+            self.is_locked = False
+            self.invite_list = {}
+        
         def is_char_available(self, char_id):
             return char_id not in [x.char_id for x in self.clients]
 
@@ -67,7 +113,17 @@ class AreaManager:
         def set_next_msg_delay(self, msg_length):
             delay = min(3000, 100 + 60 * msg_length)
             self.next_message_time = round(time.time() * 1000.0 + delay)
-
+        
+        def is_iniswap(self, client, anim1, anim2, char):
+            if self.iniswap_allowed:
+                return False
+            if '..' in anim1 or '..' in anim2:
+                return True
+            for char_link in self.server.allowed_iniswaps:
+                if client.get_char_name() in char_link and char in char_link:
+                    return False
+            return True
+        
         def play_music(self, name, cid, length=-1):
             self.send_command('MC', name, cid)
             if self.music_looper:
@@ -75,12 +131,6 @@ class AreaManager:
             if length > 0:
                 self.music_looper = asyncio.get_event_loop().call_later(length,
                                                                         lambda: self.play_music(name, -1, length))
-
-        def get_target_by_char_name(self, char_name):
-            for c in self.clients:
-                if c.get_char_name().lower() == char_name.lower():
-                    return c
-            return None
 
         def can_send_message(self):
             return (time.time() * 1000.0 - self.next_message_time) > 0
@@ -102,6 +152,10 @@ class AreaManager:
             self.background = bg
             self.send_command('BN', self.background)
 
+        def change_background_mod(self, bg):
+            self.background = bg
+            self.send_command('BN', self.background)
+
         def change_status(self, value):
             allowed_values = ('idle', 'building-open', 'building-full', 'casing-open', 'casing-full', 'recess')
             if value.lower() not in allowed_values:
@@ -120,6 +174,18 @@ class AreaManager:
             self.current_music_player = client.get_char_name()
             self.current_music = name
 
+        def get_evidence_list(self, client):
+            client.evi_list, evi_list = self.evi_list.create_evi_list(client)
+            return evi_list
+
+        def broadcast_evidence_list(self):
+            """
+                LE#<name>&<desc>&<img>#<name>
+                
+            """
+            for client in self.clients:
+                client.send_command('LE', *self.get_evidence_list(client))
+
     def __init__(self, server):
         self.server = server
         self.cur_id = 0
@@ -130,8 +196,21 @@ class AreaManager:
         with open('config/areas.yaml', 'r') as chars:
             areas = yaml.load(chars)
         for item in areas:
+            if 'evidence_mod' not in item:
+                item['evidence_mod'] = 'FFA'
+            if 'locking_allowed' not in item:
+                item['locking_allowed'] = False
+            if 'iniswap_allowed' not in item:
+                item['iniswap_allowed'] = True
+            if 'rp_getarea_allowed' not in item:
+                item['rp_getarea_allowed'] = True
+            if 'rp_getareas_allowed' not in item:
+                item['rp_getareas_allowed'] = True
+            
             self.areas.append(
-                self.Area(self.cur_id, self.server, item['area'], item['background'], item['bglock']))
+                self.Area(self.cur_id, self.server, item['area'], item['background'], 
+                          item['bglock'], item['evidence_mod'], item['locking_allowed'], 
+                          item['iniswap_allowed'], item['rp_getarea_allowed'], item['rp_getareas_allowed']))
             self.cur_id += 1
 
     def default_area(self):
