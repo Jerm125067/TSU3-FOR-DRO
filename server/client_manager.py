@@ -55,7 +55,7 @@ class ClientManager:
             self.is_ooc_muted = False
             self.pm_mute = False
             self.mod_call_time = 0
-            self.in_rp = False
+            self.in_rp = True
             self.ipid = ipid
 
             self.following = ''

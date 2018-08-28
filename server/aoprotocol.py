@@ -391,8 +391,7 @@ class AOProtocol(asyncio.Protocol):
         if self.client.name == '':
             self.client.send_host_message('You must insert a name with at least one letter')
             return
-        if self.client.name.startswith(self.server.config['hostname']) or self.client.name.startswith('<dollar>G'):
-            self.client.send_host_message('That name is reserved!')
+        if self.server.config['hostname'] in self.client.name or '<dollar>G' in self.client.name:
             return
         if args[1].startswith('/'):
             spl = args[1][1:].split(' ', 1)
