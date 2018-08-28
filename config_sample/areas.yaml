@@ -6,6 +6,7 @@
   iniswap_allowed: true
   rp_getareas_allowed: true
   rp_getarea_allowed: true
+  rp_getarea_allowed: true
 - area: 1-Testing Labs
   background: Bio Lab_HD
   bglock: false
