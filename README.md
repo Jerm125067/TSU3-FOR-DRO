@@ -54,6 +54,8 @@ Requires Python 3.5+.
     - Changes the current background
 * **roll** "max" 
     - Rolls a 1D6 if blank
+* **roll** "Dice#Max (+)(-)(*)(/)" 
+    - Rolls a 1D6 if blank    
 * **coinflip**
     - Flips a coin
 * **currentmusic** 
@@ -64,9 +66,15 @@ Requires Python 3.5+.
 When logged in as mod, /getarea and /getareas will also display IPs.
 Using /charselect "target" will kick a player back to the character select screen
 
-* **login** "Password"
+* **login* "Password"
+* **logincm** "Password"
+* **loginrp** "Password"
+* **gooc** "Message" 
+    - Sends a serverwide message with ooc name
 * **gm** "Message" 
     - Sends a serverwide message with mod tag
+* **st** "Message" 
+    - Staff Chat
 * **lm** "Message" 
     - Sends an area OOC message with mod tag
 * **play** "song.mp3" 
@@ -77,6 +85,14 @@ Using /charselect "target" will kick a player back to the character select scree
     - Sends a serverwide announcement
 * **kick** "Target" 
     - Kicks the target, can be IP or character name
+* **toggle_rollp** 
+    -Disables rollp in one area
+* **toggle_area** 
+    -Disables area in one area    
+* **toggle_getarea** 
+    -Disables getarea in one area     
+* **toggle_getareas** 
+    -Disables getareas in one area   
 * **ban** "IP" 
     - Bans the IP
 * **unban** "IP" 
