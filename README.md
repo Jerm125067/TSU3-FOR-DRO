@@ -70,7 +70,7 @@ Requires Python 3.5+.
 When logged in as mod, /getarea and /getareas will also display IPs.
 Using /charselect "target" will kick a player back to the character select screen
 
-* **login* "Password"
+* **login** "Password"
 * **logincm** "Password"
 * **loginrp** "Password"
 * **gooc** "Message" 
