@@ -1128,7 +1128,7 @@ def ooc_cmd_roll(client, arg):
                                     .format(client.get_char_name(), roll, chosen_max, client.area.name, client.area.id), 
                                     pred=lambda c: (c.is_mod or c.is_gm or c.is_cm) and c != client)
     
-    SALT = ''.join(random.choices(string.ascii_uppercase + string.digits, k=16))
+
     logger.log_server(
         '[{}][{}]Used /roll and got {} out of {}.'.format(client.area.id, client.get_char_name(), roll, chosen_max))
 
@@ -1245,6 +1245,6 @@ def ooc_cmd_rollp(client, arg):
                                     .format(client.get_char_name(), roll, chosen_max, client.area.name, client.area.id), 
                                     pred=lambda c: (c.is_mod or c.is_gm or c.is_cm) and c != client)
     
-    SALT = ''.join(random.choices(string.ascii_uppercase + string.digits, k=16))
+
     logger.log_server(
-        '[{}][{}]Used /rollp and got {} out of {}.'.format(client.area.id, client.get_char_name(), hashlib.sha1((str(roll) + SALT).encode('utf-8')).hexdigest() + '|' + SALT, chosen_max))
+        '[{}][{}]Used /roll and got {} out of {}.'.format(client.area.id, client.get_char_name(), roll, chosen_max))
