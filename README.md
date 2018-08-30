@@ -58,7 +58,7 @@ Requires Python 3.5+.
     - Rolls a 1D6 if blank    
 * **rollp** "max" 
     - Privately rolls a 1D6 if blank
-* **roll** "Dice#Max (+)(-)(*)(/)" 
+* **rollp** "Dice#Max (+)(-)(*)(/)" 
     - Privately rolls a 1D6 if blank        
 * **coinflip**
     - Flips a coin
