@@ -461,7 +461,7 @@ class AOProtocol(asyncio.Protocol):
             return
         if not self.validate_net_cmd(args, self.ArgType.STR):
             return
-        if args[0] not in ('testimony1', 'testimony2'):
+        if args[0] not in ('testimony1', 'testimony2', 'testimony3', 'testimony4'):
             return
         self.client.area.send_command('RT', args[0])
         self.client.area.add_to_judgelog(self.client, 'used WT/CE')
