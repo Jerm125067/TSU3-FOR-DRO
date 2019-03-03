@@ -167,6 +167,10 @@ class ClientManager:
             self.send_command('FM', *self.server.music_list_ao2)
             
         def change_area(self, area, override = False):
+            if area.lobby_area and not self.is_visible and not self.is_mod and not self.is_cm:
+                raise ClientError('Change the music, speak IC, or ask a GM/Mod to reveal yourself. Otherwise, you wont be allowed in the desired area.')
+            if area.private_area and not self.is_visible:
+                raise ClientError('In accordance to basic decency within the server... The Server Owner has prevented you from sneaking in this private area. Reveal yourself and head in if needed.')          
             if self.area == area:
                 raise ClientError('User is already in target area.')
             if area.is_locked and not self.is_mod and not self.is_gm and not (self.ipid in area.invite_list):
