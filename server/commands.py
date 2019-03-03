@@ -2320,6 +2320,10 @@ def ooc_cmd_sneak(client, arg):
         raise ClientError('You must be authorized to do that.')
     if len(arg) == 0 or len(arg) > 10 or not arg.isdigit():
         raise ArgumentError('{} does not look like a valid client ID or IPID.'.format(arg))
+    if client.is_gm and client.area.lobby_area:
+     raise ClientError('You have no authorization to do that here. If you feel this is a mistake. Contact Server Owner.')    
+    if (client.is_cm or client.is_mod) and client.area.private_area:
+     raise ClientError('You have no authorization to do that here. If you feel this is a mistake. Contact Server Owner.')	   
     
     # Assumes that all 10 digit numbers are IPIDs and any smaller numbers are client IDs.
     # This places the assumption that there are no more than 10 billion clients connected simultaneously
@@ -2363,6 +2367,10 @@ def ooc_cmd_reveal(client, arg):
         raise ClientError('You must be authorized to do that.')
     if len(arg) == 0 or len(arg) > 10 or not arg.isdigit():
         raise ArgumentError('{} does not look like a valid client ID or IPID.'.format(arg))
+    if client.is_gm and client.area.lobby_area:
+     raise ClientError('You have no authorization to do that here. If you feel this is a mistake. Contact Server Owner.')    
+    if (client.is_cm or client.is_mod) and client.area.private_area:
+     raise ClientError('You have no authorization to do that here. If you feel this is a mistake. Contact Server Owner.')	 	
     
     # Assumes that all 10 digit numbers are IPIDs and any smaller numbers are client IDs.
     # This places the assumption that there are no more than 10 billion clients connected simultaneously
